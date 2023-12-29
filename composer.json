@@ -1,5 +1,5 @@
 {
-    "name": "cpliakas/dynamo-db-odm",
+    "name": "vanyok/dynamo-db-odm",
     "type": "library",
     "description": "A lightweight ODM for DynamoDB",
     "homepage": "https://github.com/cpliakas/dynamo-db-odm",
