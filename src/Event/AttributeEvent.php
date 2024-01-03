@@ -3,7 +3,7 @@
 namespace Cpliakas\DynamoDb\ODM\Event;
 
 use Cpliakas\DynamoDb\ODM\Entity;
-use Symfony\Component\EventDispatcher\Event;
+use Symfony\Contracts\EventDispatcher\Event;
 
 class AttributeEvent extends Event
 {

@@ -276,3 +276,63 @@ $book = $dm->read('Book', '0-1234-5678-9');
 echo $book['created']->format(\DateTime::ATOM);
 
 ```
+In a Symfony project, it's best to follow the framework's structure and best practices to ensure maintainability and organization of your code.
+
+Here's a general guideline on where you might place this code:
+
+1. **AWS Credentials:**
+   Avoid hardcoding your AWS credentials directly into your code for security reasons. Instead, set them in environment variables or use a configuration file that's excluded from version control for safety.
+
+2. **Service Configuration:**
+   Symfony relies heavily on dependency injection and services. Consider creating a service to handle interactions with DynamoDB.
+
+3. **Services Configuration File:**
+   You can define your services and their configurations in Symfony's service configuration files (`services.yaml` or individual `*.yaml` files in `config/services`). This is where you can define a service responsible for interacting with DynamoDB.
+
+Here's an example of how you might structure the setup in Symfony:
+
+In your `services.yaml` or an appropriate services configuration file:
+
+```yaml
+services:
+    app.dynamodb_manager:
+        class: Cpliakas\DynamoDb\ODM\DocumentManager
+        arguments:
+            - '@app.dynamodb_client'
+
+    app.dynamodb_client:
+        class: Aws\DynamoDb\DynamoDbClient
+        arguments:
+            - 
+                key: '%env(AWS_ACCESS_KEY_ID)%'
+                secret: '%env(AWS_SECRET_ACCESS_KEY)%'
+                region: '%env(AWS_DEFAULT_REGION)%'
+```
+
+This assumes you've defined appropriate environment variables in your `.env` file for `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_DEFAULT_REGION`.
+
+Then, in your code (e.g., a controller or a service), you can inject and use the DynamoDB service:
+
+```php
+use Cpliakas\DynamoDb\ODM\DocumentManager;
+
+class YourController
+{
+    private $dynamoDbManager;
+
+    public function __construct(DocumentManager $dynamoDbManager)
+    {
+        $this->dynamoDbManager = $dynamoDbManager;
+    }
+
+    // Your action method
+    public function yourActionMethod()
+    {
+        // Use $this->dynamoDbManager to interact with DynamoDB
+    }
+}
+```
+
+This way, Symfony's dependency injection container will handle the creation and injection of the DynamoDB client and the DocumentManager into your controller or service.
+
+Adjust these configurations according to your Symfony project's structure and needs.

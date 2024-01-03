@@ -201,9 +201,7 @@ class DocumentManager implements DocumentManagerInterface
             'TableName' => $this->getEntityTable($entity),
             'Key'       => $this->formatKeyCondition($entity),
         );
-
-        $model = $this->dynamoDb->deleteItem($commandOptions);
-
+        $res = $model = $this->dynamoDb->deleteItem($commandOptions);
         $this->dispatchEntityResponseEvent( Events::ENTITY_POST_DELETE, $entity, $model);
         return true;
     }
@@ -223,7 +221,6 @@ class DocumentManager implements DocumentManagerInterface
     public function exists($entityClass, $primaryKey, array $commandOptions = array())
     {
         $entity = $this->initEntity($entityClass, $primaryKey);
-
         $commandOptions = array(
             'ConsistentRead'         => $this->consistentRead,
             'TableName'              => $this->getEntityTable($entity),
@@ -520,7 +517,13 @@ class DocumentManager implements DocumentManagerInterface
         $attributes = array($entity::getHashKeyAttribute() => $entity->getHashKey());
         $rangeKeyAttribute = $entity::getRangeKeyAttribute();
         if ($rangeKeyAttribute) {
-            $attributes[$rangeKeyAttribute] = $entity->getRangeKey();
+            if(is_array($rangeKeyAttribute)){
+                foreach ($rangeKeyAttribute as $attribute){
+                    $attributes = $entity->getRangeKey();
+                }
+            }else{
+                $attributes[$rangeKeyAttribute] = $entity->getRangeKey();
+            }
         }
 
         $commandOptions = array(
@@ -533,7 +536,7 @@ class DocumentManager implements DocumentManagerInterface
         if ($entity::enforceEntityIntegrity()) {
             if ($mustExist) {
                 $entityClass = get_class($entity);
-                $commandOptions['Expected'] = $this->formatAttributes($entityClass, $attributes, Attribute::FORMAT_EXPECTED);
+                $commandOptions['Expected'] = $this->formatAttributes($entityClass, $attributes, null);
             } else {
                 foreach ($attributes as $attribute => $value) {
                     $commandOptions['Expected'][$attribute] = array('Exists' => false);
@@ -552,7 +555,7 @@ class DocumentManager implements DocumentManagerInterface
      *
      * @return array
      */
-    protected function formatEntityAttributes(EntityInterface $entity, $format = Attribute::FORMAT_PUT)
+    protected function formatEntityAttributes(EntityInterface $entity, $format = null)
     {
         return $this->formatAttributes(get_class($entity), $entity->getAttributes());
     }
@@ -570,22 +573,23 @@ class DocumentManager implements DocumentManagerInterface
      *
      * @see \Aws\DynamoDb\DynamoDbClient::formatAttributes()
      */
-    protected function formatAttributes($entityClass, array $attributes, $format = Attribute::FORMAT_PUT)
+    protected function formatAttributes($entityClass, array $attributes, $format = 'FORMAT_PUT')
     {
         $entityClass = $this->getEntityClass($entityClass);
         $formatted = array();
 
         $mappings = $entityClass::getDataTypeMappings();
+
         foreach ($attributes as $attribute => $value) {
             if (isset($mappings[$attribute])) {
                 $dataType = $mappings[$attribute];
-                if (Attribute::FORMAT_PUT == $format) {
+                if ('FORMAT_PUT' == $format) {
                     $formatted[$attribute] = array($dataType => $value);
                 } else {
                     $formatted[$attribute] = array('Value' => array($dataType => $value));
                 }
             } else {
-                $formatted[$attribute] = Attribute::factory($value)->getFormatted($format);
+                $formatted[$attribute] = array('S' => $value);
             }
         }
 
@@ -604,8 +608,16 @@ class DocumentManager implements DocumentManagerInterface
         );
 
         $rangeKeyAttribute = $entity::getRangeKeyAttribute();
+
         if ($rangeKeyAttribute !== false) {
-            $attributes[$rangeKeyAttribute] = $entity->getRangeKey();
+            if(is_array($rangeKeyAttribute)){
+                foreach ($rangeKeyAttribute as $attribute){
+                    $attributes = $entity->getRangeKey();
+                }
+            }else{
+                $attributes[$rangeKeyAttribute] = $entity->getRangeKey();
+            }
+
         }
 
         return $this->formatAttributes(get_class($entity), $attributes);
@@ -649,35 +661,27 @@ class DocumentManager implements DocumentManagerInterface
     {
         if ($commandOptions instanceof ConditionsInterface) {
             $commandOptions = array(
-                $optionKey => $this->formatConditions($entityClass, $commandOptions)
-            ) + $commandOptions->getOptions();
+                    $optionKey => $this->formatConditions($entityClass, $commandOptions)
+                ) + $commandOptions->getOptions();
         } elseif (!is_array($commandOptions)) {
             throw new \InvalidArgumentException('Expecting command options to be an array or instance of \Cpliakas\DynamoDb\ODM\KeyConditionsInterface');
         }
 
         $commandOptions['TableName'] = $this->getEntityTable($entityClass);
-        $commandOptions += array(
-            'ConsistentRead'         => $this->consistentRead,
-            'ReturnConsumedCapacity' => $this->returnConsumedCapacity,
-        );
+        /* $commandOptions += array(
+             'ConsistentRead'         => $this->consistentRead,
+             'ReturnConsumedCapacity' => $this->returnConsumedCapacity,
+         );*/
 
         $command = strtolower($command);
         $eventNamePrefix = 'dynamo_db.search.';
 
         $this->dispatchSearchRequestEvent($eventNamePrefix . 'pre_' . $command, $entityClass);
-        $iterator = $this->dynamoDb->getIterator($command, $commandOptions);
+        $iterator =  $this->dynamoDb->scan( $commandOptions);
         $this->dispatchSearchResponseEvent($eventNamePrefix . 'post_' . $command, $entityClass, $iterator);
 
-        $entities = array();
-        foreach ($iterator as $item) {
-            $data = array();
-            foreach ($item as $attribute => $value) {
-                $data[$attribute] = current($value);
-            }
-            $entities[] = $this->entityFactory($entityClass, $data);
-        }
+        return $iterator['Items'];
 
-        return $entities;
     }
 
     /**
@@ -711,18 +715,18 @@ class DocumentManager implements DocumentManagerInterface
     protected function dispatchEntityRequestEvent($eventName, Entity $entity)
     {
         $event = new Event\EntityRequestEvent($entity);
-        $this->dispatcher->dispatch($eventName, $event);
+        $this->dispatcher->dispatch( $event, $eventName);
     }
 
     /**
      * @param string $eventName
      * @param \Cpliakas\DynamoDb\ODM\EntityInterface $entity
-     * @param \Guzzle\Service\Resource\Model $model
+     * @param \Aws\Result $model
      */
-    protected function dispatchEntityResponseEvent($eventName, Entity $entity, Model $model)
+    protected function dispatchEntityResponseEvent($eventName, Entity $entity, \Aws\Result $model)
     {
         $event = new Event\EntityResponseEvent($entity, $model);
-        $this->dispatcher->dispatch($eventName, $event);
+        $this->dispatcher->dispatch( $event, $eventName);
     }
 
     /**
@@ -732,17 +736,16 @@ class DocumentManager implements DocumentManagerInterface
     protected function dispatchSearchRequestEvent($eventName, $entityClass)
     {
         $event = new Event\SearchRequestEvent($entityClass);
-        $this->dispatcher->dispatch($eventName, $event);
+        $this->dispatcher->dispatch( $event,$eventName);
     }
-
     /**
      * @param string $eventName
      * @param string $entityClass
-     * @param Aws\Common\Iterator\AwsResourceIterator $iterator
+     * @param  $iterator
      */
-    protected function dispatchSearchResponseEvent($eventName, $entityClass, AwsResourceIterator $iterator)
+    protected function dispatchSearchResponseEvent($eventName, $entityClass, $iterator)
     {
         $event = new Event\SearchResponseEvent($entityClass, $iterator);
-        $this->dispatcher->dispatch($eventName, $event);
+        $this->dispatcher->dispatch( $event,$eventName );
     }
 }

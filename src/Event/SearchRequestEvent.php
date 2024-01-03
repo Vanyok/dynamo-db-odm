@@ -2,7 +2,7 @@
 
 namespace Cpliakas\DynamoDb\ODM\Event;
 
-use Symfony\Component\EventDispatcher\Event;
+use Symfony\Contracts\EventDispatcher\Event;
 
 class SearchRequestEvent extends Event
 {

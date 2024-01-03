@@ -3,7 +3,7 @@
 namespace Cpliakas\DynamoDb\ODM\Event;
 
 use Aws\Common\Iterator\AwsResourceIterator;
-use Symfony\Component\EventDispatcher\Event;
+use Symfony\Contracts\EventDispatcher\Event;
 
 class SearchResponseEvent extends Event
 {
@@ -19,9 +19,9 @@ class SearchResponseEvent extends Event
 
     /**
      * @param string $entityClass
-     * @param \Aws\Common\Iterator\AwsResourceIterator $iterator
+     * @param  $iterator
      */
-    public function __construct($entityClass, AwsResourceIterator $iterator)
+    public function __construct($entityClass,  $iterator)
     {
         $this->entityClass = $entityClass;
         $this->iterator    = $iterator;

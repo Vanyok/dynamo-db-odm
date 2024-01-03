@@ -3,6 +3,7 @@
 namespace Cpliakas\DynamoDb\ODM;
 
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Cpliakas\DynamoDb\ODM\Event\AttributeEvent;
 
 class Entity extends \ArrayObject implements EntityInterface
 {
@@ -208,8 +209,8 @@ class Entity extends \ArrayObject implements EntityInterface
         unset($this->renderCache[$index]);
 
         $eventName = 'dynamo_db.' . $this->classIdentifier . '.' . $index . '.transform';
-        $event = new Event\AttributeEvent($this, $index, $value);
-        $this->dispatcher->dispatch($eventName, $event);
+        $event = new AttributeEvent($this, $index, $value);
+        $this->dispatcher->dispatch( $event, $eventName);
 
         parent::offsetSet($index, $event->getValue());
     }
@@ -224,7 +225,7 @@ class Entity extends \ArrayObject implements EntityInterface
 
             $eventName = 'dynamo_db.' . $this->classIdentifier . '.' . $index . '.render';
             $event = new Event\AttributeEvent($this, $index, $value);
-            $this->dispatcher->dispatch($eventName, $event);
+            $this->dispatcher->dispatch( $event, $eventName);
 
             $this->renderCache[$index] = $event->getValue();
         }
