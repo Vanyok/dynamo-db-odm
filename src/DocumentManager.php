@@ -132,9 +132,7 @@ class DocumentManager implements DocumentManagerInterface
     public function create(EntityInterface $entity, array $commandOptions = array())
     {
         $this->dispatchEntityRequestEvent(Events::ENTITY_PRE_CREATE, $entity);
-        var_dump($commandOptions);
         $commandOptions += $this->formatPutItemCommandOptions($entity, false);
-        var_dump($commandOptions);
         $model = $this->dynamoDb->putItem($commandOptions);
 
         $this->dispatchEntityResponseEvent(Events::ENTITY_POST_CREATE, $entity, $model);
@@ -751,6 +749,14 @@ class DocumentManager implements DocumentManagerInterface
         $this->dispatcher->dispatch( $event,$eventName );
     }
 
+
+    /**
+     * Create Dynamo DB table
+     *
+     * @param $tableName
+     * @param array $attributes
+     * @return void
+     */
     public function createTable($tableName, array $attributes)
     {
         $keySchema = [];
@@ -769,5 +775,20 @@ class DocumentManager implements DocumentManagerInterface
             'AttributeDefinitions' => $attributeDefinitions,
             'ProvisionedThroughput' => ['ReadCapacityUnits' => 10, 'WriteCapacityUnits' => 10],
         ]);
+    }
+
+    /**
+     * Delete Dynamo DB table by name
+     *
+     * @param string $TableName
+     * @return void
+     */
+    public function deleteTable(string $TableName)
+    {
+
+        return $this->dynamoDb->deleteTable([
+            'TableName' => $TableName,
+        ]);
+
     }
 }
